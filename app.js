@@ -319,13 +319,67 @@ $("signupTab").onclick=()=>{mode="signup";$("signupTab").classList.add("active")
 
 $("authForm").onsubmit=async e=>{
   e.preventDefault();
-  if(!sb){$("authMsg").textContent="ยังไม่ได้ตั้งค่า Supabase ใน config.js";return}
-  const email=$("email").value.trim(),password=$("password").value;
-  const r=mode==="signup"?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
-  if(r.error){$("authMsg").textContent=r.error.message;return}
-  if(mode==="signup"&&!r.data.session){$("authMsg").textContent="สมัครสำเร็จ กรุณาตรวจอีเมลถ้าระบบเปิดการยืนยันอีเมล"}else{user=r.data.user;await start()}
-};
 
+  const msg=$("authMsg");
+
+  if(!sb){
+    msg.textContent="ยังไม่ได้ตั้งค่า Supabase ใน config.js";
+    return;
+  }
+
+  const email=$("email").value.trim();
+  const password=$("password").value;
+
+  if(!email||!password){
+    msg.textContent="กรุณากรอกอีเมลและรหัสผ่าน";
+    return;
+  }
+
+  msg.textContent="กำลังเข้าสู่ระบบ...";
+
+  try{
+    let r;
+
+    if(mode==="signup"){
+      r=await sb.auth.signUp({
+        email,
+        password
+      });
+    }else{
+      r=await sb.auth.signInWithPassword({
+        email,
+        password
+      });
+    }
+    if(r.error){
+      console.error("Supabase Auth Error:",r.error);
+      msg.textContent=
+        "เข้าสู่ระบบไม่ได้: "+r.error.message;
+      return;
+    }
+    if(mode==="signup"){
+      if(r.data.session){
+        user=r.data.user;
+        await start();
+      }else{
+        msg.textContent=
+          "สมัครสำเร็จ แต่ต้องยืนยันอีเมลก่อนเข้าสู่ระบบ";
+      }
+    }else{
+      if(!r.data.user){
+        msg.textContent="ไม่พบข้อมูลผู้ใช้";
+        return;
+      }
+      user=r.data.user;
+      await start();
+    }
+  }catch(err){
+    console.error("Login Error:",err);
+
+    msg.textContent=
+      "เกิดข้อผิดพลาด: "+(err?.message||String(err));
+  }
+};
 async function start(){
   injectUI();$("account").textContent=user.email;$("auth").classList.add("hidden");
   isAdmin=await checkAdmin();showSubjects();
