@@ -243,7 +243,6 @@ $("next").onclick=()=>{if(current<dbQuestions.length-1){current++;render();saveP
 $("reset").onclick=()=>{if(confirm("ล้างคำตอบของชุดนี้และเริ่มใหม่หรือไม่?")){answers={};submitted={};score=0;current=0;saveProgress();render()}};
 $("review").onclick=()=>{current=0;render()};
 $("retake").onclick=()=>{answers={};submitted={};score=0;current=0;saveProgress();render()};
-$("resultBack").onclick=()=>showQuizzesFor(activeSubject);
 
 (async()=>{
   injectUI();
