@@ -1,7 +1,7 @@
 const sbReady=window.SUPABASE_URL&&!window.SUPABASE_URL.startsWith("YOUR_")&&window.SUPABASE_ANON_KEY&&!window.SUPABASE_ANON_KEY.startsWith("YOUR_");
 const sb=sbReady?supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY):null;
 let user=null,activeSubject=null,activeQuiz=null,current=0,answers={},submitted={},score=0;
-let subjects=[],quizzes=[],dbQuestions=[],isAdmin=true;
+let subjects=[],quizzes=[],dbQuestions=[],isAdmin=false;
 const $=id=>document.getElementById(id),letters=["A","B","C","D"];
 
 const CSS=`
