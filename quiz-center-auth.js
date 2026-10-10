@@ -1,13 +1,15 @@
 /*
  * Quiz Center learner auth + remote attempt helper.
- * This file is a helper module, not a drop-in replacement for app.js.
- * Requires the existing global `sb` Supabase client.
+ * Uses window.sb, assigned by app.js after Supabase client initialization.
  */
 window.QuizCenterAuth = (() => {
-  const $ = (id) => document.getElementById(id);
+  const client = () => {
+    if (!window.sb) throw new Error("ยังไม่ได้เชื่อมต่อ Supabase");
+    return window.sb;
+  };
 
   async function signUp(email, password) {
-    const { data, error } = await sb.auth.signUp({
+    const { data, error } = await client().auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
@@ -19,7 +21,7 @@ window.QuizCenterAuth = (() => {
   }
 
   async function signIn(email, password) {
-    const { data, error } = await sb.auth.signInWithPassword({
+    const { data, error } = await client().auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password
     });
@@ -29,18 +31,18 @@ window.QuizCenterAuth = (() => {
   }
 
   async function signOut() {
-    const { error } = await sb.auth.signOut();
+    const { error } = await client().auth.signOut();
     if (error) throw error;
   }
 
   async function currentUser() {
-    const { data, error } = await sb.auth.getSession();
+    const { data, error } = await client().auth.getSession();
     if (error) throw error;
     return data.session?.user || null;
   }
 
   async function beginAttempt(userId, quizId, totalQuestions) {
-    const { data, error } = await sb.from("quiz_attempts").insert({
+    const { data, error } = await client().from("quiz_attempts").insert({
       user_id: userId,
       quiz_id: quizId,
       answers: {},
@@ -64,7 +66,7 @@ window.QuizCenterAuth = (() => {
     };
     if (allowed.status === "completed") allowed.completed_at = new Date().toISOString();
 
-    const { data, error } = await sb.from("quiz_attempts")
+    const { data, error } = await client().from("quiz_attempts")
       .update(allowed)
       .eq("id", attemptId)
       .eq("user_id", userId)
@@ -77,7 +79,7 @@ window.QuizCenterAuth = (() => {
   async function listHistory() {
     const user = await currentUser();
     if (!user) throw new Error("กรุณาเข้าสู่ระบบก่อนดูประวัติ");
-    const { data, error } = await sb.from("quiz_attempts")
+    const { data, error } = await client().from("quiz_attempts")
       .select("id,quiz_id,score,total_questions,status,started_at,completed_at,updated_at,quizzes(title)")
       .eq("user_id", user.id)
       .order("started_at", { ascending: false });
@@ -85,5 +87,17 @@ window.QuizCenterAuth = (() => {
     return data || [];
   }
 
-  return { signUp, signIn, signOut, currentUser, beginAttempt, updateAttempt, listHistory };
+  async function latestAttempt(userId, quizId) {
+    const { data, error } = await client().from("quiz_attempts")
+      .select("id,user_id,quiz_id,answers,submitted,score,total_questions,status,started_at,completed_at,updated_at")
+      .eq("user_id", userId)
+      .eq("quiz_id", quizId)
+      .eq("status", "in_progress")
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return data?.[0] || null;
+  }
+
+  return { signUp, signIn, signOut, currentUser, beginAttempt, updateAttempt, listHistory, latestAttempt };
 })();
