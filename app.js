@@ -1,107 +1,3 @@
-/*
- * Quiz Center learner auth + remote attempt helper.
- * Uses window.sb, assigned by app.js after Supabase client initialization.
- */
-window.QuizCenterAuth = (() => {
-  const client = () => {
-    if (!window.sb) throw new Error("ยังไม่ได้เชื่อมต่อ Supabase");
-    return window.sb;
-  };
-
-  async function signUp(email, password) {
-    const { data, error } = await client().auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        emailRedirectTo: window.location.origin + window.location.pathname
-      }
-    });
-    if (error) throw error;
-    return data;
-  }
-
-  async function signIn(email, password) {
-    const { data, error } = await client().auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password
-    });
-    if (error) throw error;
-    if (!data.user) throw new Error("ไม่พบข้อมูลผู้เรียน");
-    return data.user;
-  }
-
-  async function signOut() {
-    const { error } = await client().auth.signOut();
-    if (error) throw error;
-  }
-
-  async function currentUser() {
-    const { data, error } = await client().auth.getSession();
-    if (error) throw error;
-    return data.session?.user || null;
-  }
-
-  async function beginAttempt(userId, quizId, totalQuestions) {
-    const { data, error } = await client().from("quiz_attempts").insert({
-      user_id: userId,
-      quiz_id: quizId,
-      answers: {},
-      submitted: {},
-      score: 0,
-      total_questions: totalQuestions,
-      status: "in_progress"
-    }).select("id,user_id,quiz_id,answers,submitted,score,total_questions,status,started_at,completed_at,updated_at").single();
-    if (error) throw error;
-    return data;
-  }
-
-  async function updateAttempt(attemptId, userId, payload) {
-    const allowed = {
-      answers: payload.answers || {},
-      submitted: payload.submitted || {},
-      score: Number(payload.score || 0),
-      total_questions: Number(payload.total_questions || 0),
-      status: payload.status || "in_progress",
-      updated_at: new Date().toISOString()
-    };
-    if (allowed.status === "completed") allowed.completed_at = new Date().toISOString();
-
-    const { data, error } = await client().from("quiz_attempts")
-      .update(allowed)
-      .eq("id", attemptId)
-      .eq("user_id", userId)
-      .select("id,status,score,total_questions,updated_at,completed_at")
-      .single();
-    if (error) throw error;
-    return data;
-  }
-
-  async function listHistory() {
-    const user = await currentUser();
-    if (!user) throw new Error("กรุณาเข้าสู่ระบบก่อนดูประวัติ");
-    const { data, error } = await client().from("quiz_attempts")
-      .select("id,quiz_id,score,total_questions,status,started_at,completed_at,updated_at,quizzes(title)")
-      .eq("user_id", user.id)
-      .order("started_at", { ascending: false });
-    if (error) throw error;
-    return data || [];
-  }
-
-  async function latestAttempt(userId, quizId) {
-    const { data, error } = await client().from("quiz_attempts")
-      .select("id,user_id,quiz_id,answers,submitted,score,total_questions,status,started_at,completed_at,updated_at")
-      .eq("user_id", userId)
-      .eq("quiz_id", quizId)
-      .eq("status", "in_progress")
-      .order("updated_at", { ascending: false })
-      .limit(1);
-    if (error) throw error;
-    return data?.[0] || null;
-  }
-
-  return { signUp, signIn, signOut, currentUser, beginAttempt, updateAttempt, listHistory, latestAttempt };
-})();
-
 /* Quiz Center rebuild. Uses the existing Supabase tables: subjects, quizzes, questions, admin_users. */
 const sbReady=!!(window.SUPABASE_URL&&window.SUPABASE_ANON_KEY&&!String(window.SUPABASE_URL).startsWith('YOUR_')&&!String(window.SUPABASE_ANON_KEY).startsWith('YOUR_'));
 const sb=sbReady?window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY):null;window.sb=sb;
@@ -115,10 +11,10 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function showOnly(id){['auth','subjects','quiz','result'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
 function setHeader(title,subtitle){$('pageTitle').textContent=title;$('pageSubtitle').textContent=subtitle||''}
 let learnerAuthAction='login';
-function setLearnerAuthAction(action){learnerAuthAction=action;$('learnerLoginMode').className=action==='login'?'primary':'ghost';$('learnerSignupMode').className=action==='signup'?'primary':'ghost';$('learnerSignupMode').textContent=action==='signup'?'โหมดสมัครบัญชี':'สมัครบัญชีใหม่';$('learnerPassword').autocomplete=action==='signup'?'new-password':'current-password';$('authSubmit').textContent=authMode==='admin'?'ยืนยันรหัสผ่านแอดมิน':(action==='signup'?'สมัครบัญชีผู้เรียน':'เข้าสู่ระบบ');hideMessage()}
-function setAuthMode(mode){authMode=mode;const admin=mode==='admin';$('learnerTab').className=admin?'ghost':'primary active';$('adminTab').className=admin?'primary active':'ghost';$('emailWrap').classList.toggle('hidden',admin);$('email').required=!admin;$('email').value=admin?ADMIN_EMAIL:'';$('adminIdentity').textContent=ADMIN_EMAIL;$('passwordWrap').classList.toggle('hidden',!admin);$('password').required=admin;$('password').value='';$('learnerPasswordWrap').classList.toggle('hidden',admin);$('learnerAuthModeWrap').classList.toggle('hidden',admin);$('learnerPassword').required=!admin;$('authSubmit').textContent=admin?'ยืนยันรหัสผ่านแอดมิน':(learnerAuthAction==='signup'?'สมัครบัญชีผู้เรียน':'เข้าสู่ระบบ');hideMessage()}
-$('learnerTab').onclick=()=>setAuthMode('learner');$('adminTab').onclick=()=>setAuthMode('admin');$('learnerLoginMode').onclick=()=>setLearnerAuthAction('login');$('learnerSignupMode').onclick=()=>setLearnerAuthAction('signup');
-$('authForm').addEventListener('submit',async e=>{e.preventDefault();hideMessage();if(!sb){message('ยังไม่ได้ตั้งค่า Supabase ใน config.js','error');return}const email=(authMode==='admin'?ADMIN_EMAIL:$('email').value).trim().toLowerCase();if(!email){message('กรุณากรอกอีเมล','error');return}const btn=$('authSubmit');btn.disabled=true;try{if(authMode==='learner'){const password=$('learnerPassword').value;if(!password||password.length<6)throw new Error('กรุณากรอกรหัสผ่านอย่างน้อย 6 ตัวอักษร');if(learnerAuthAction==='signup'){const data=await window.QuizCenterAuth.signUp(email,password);if(!data.session){message('สมัครบัญชีแล้ว กรุณาตรวจอีเมลเพื่อยืนยันบัญชี จากนั้นกลับมาเข้าสู่ระบบ','success');return}user={email:data.user.email||email,id:data.user.id,mode:'learner'};isAdmin=false;localStorage.removeItem('quiz_current_email');localStorage.removeItem('quiz_admin_mode');await startLearner()}else{const signed=await window.QuizCenterAuth.signIn(email,password);const {data:adminOk,error:adminErr}=await sb.rpc('is_quiz_admin');if(!adminErr&&adminOk===true){await sb.auth.signOut();throw new Error('อีเมลนี้เป็นบัญชีแอดมิน กรุณาเลือกแท็บแอดมิน')}user={email:signed.email||email,id:signed.id,mode:'learner'};isAdmin=false;localStorage.removeItem('quiz_current_email');localStorage.removeItem('quiz_admin_mode');await startLearner()}}else{const password=$('password').value;if(!password){message('กรุณากรอกรหัสผ่านแอดมิน','error');return}const {data,error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;if(!data.user)throw new Error('ไม่พบผู้ใช้');const {data:adminOk,error:adminErr}=await sb.rpc('is_quiz_admin');if(adminErr)throw new Error('ตรวจสิทธิ์แอดมินไม่สำเร็จ กรุณาตรวจ SQL ตั้งค่าระบบ: '+adminErr.message);if(adminOk!==true){await sb.auth.signOut();throw new Error('บัญชีนี้ยังไม่ได้รับสิทธิ์แอดมิน')}isAdmin=true;user={email:data.user.email||email,id:data.user.id,mode:'admin'};localStorage.removeItem('quiz_current_email');localStorage.setItem('quiz_admin_mode','true');await startAdmin()}}catch(err){message(err?.message||'เข้าสู่ระบบไม่สำเร็จ','error')}finally{btn.disabled=false}});
+function setLearnerAuthAction(action){learnerAuthAction=action;$('learnerLoginMode').className=action==='login'?'primary':'ghost';$('learnerSignupMode').className=action==='signup'?'primary':'ghost';$('learnerPassword').autocomplete=action==='signup'?'new-password':'current-password';$('authSubmit').textContent=authMode==='admin'?'ยืนยันรหัสผ่านแอดมิน':(action==='signup'?'สมัครบัญชีผู้เรียน':'เข้าสู่ระบบ');hideMessage()}
+function setAuthMode(mode){authMode=mode;const admin=mode==='admin';$('learnerTab').className=admin?'ghost':'primary active';$('adminTab').className=admin?'primary active':'ghost';$('emailWrap').classList.toggle('hidden',admin);$('email').required=!admin;$('email').value=admin?ADMIN_EMAIL:'';$('adminIdentity').textContent=ADMIN_EMAIL;$('passwordWrap').classList.toggle('hidden',!admin);$('password').required=admin;$('password').value='';$('learnerPasswordWrap').classList.toggle('hidden',admin);$('learnerAuthModeWrap').classList.toggle('hidden',admin);$('authSubmit').classList.toggle('hidden',!admin);$('learnerPassword').required=!admin;$('authSubmit').textContent=admin?'ยืนยันรหัสผ่านแอดมิน':(learnerAuthAction==='signup'?'สมัครบัญชีผู้เรียน':'เข้าสู่ระบบ');hideMessage()}
+$('learnerTab').onclick=()=>setAuthMode('learner');$('adminTab').onclick=()=>setAuthMode('admin');$('learnerLoginMode').onclick=()=>{setLearnerAuthAction('login');$('authForm').requestSubmit()};$('learnerSignupMode').onclick=()=>{setLearnerAuthAction('signup');$('authForm').requestSubmit()};
+$('authForm').addEventListener('submit',async e=>{e.preventDefault();hideMessage();if(!sb){message('ยังไม่ได้ตั้งค่า Supabase ใน config.js','error');return}const email=(authMode==='admin'?ADMIN_EMAIL:$('email').value).trim().toLowerCase();if(!email){message('กรุณากรอกอีเมล','error');return}const btn=$('authSubmit');btn.disabled=true;try{if(authMode==='learner'){const password=$('learnerPassword').value;if(!password||password.length<6)throw new Error('กรุณากรอกรหัสผ่านอย่างน้อย 6 ตัวอักษร');if(learnerAuthAction==='signup'){const data=await QuizCenterAuth.signUp(email,password);if(!data.session){message('สมัครบัญชีสำเร็จแล้ว แต่ Supabase ยังไม่เปิดเซสชันให้บัญชีนี้ กรุณายืนยันอีเมลจากกล่องจดหมายก่อน หากต้องการให้เข้าหน้าเลือกวิชาได้ทันที ให้ปิดการยืนยันอีเมลใน Supabase Auth Settings แล้วสมัครบัญชีใหม่ด้วยอีเมลที่ยังไม่เคยใช้','success');return}user={email:data.user.email||email,id:data.user.id,mode:'learner'};isAdmin=false;localStorage.removeItem('quiz_current_email');localStorage.removeItem('quiz_admin_mode');await startLearner()}else{const signed=await QuizCenterAuth.signIn(email,password);const {data:adminOk,error:adminErr}=await sb.rpc('is_quiz_admin');if(!adminErr&&adminOk===true){await sb.auth.signOut();throw new Error('อีเมลนี้เป็นบัญชีแอดมิน กรุณาเลือกแท็บแอดมิน')}user={email:signed.email||email,id:signed.id,mode:'learner'};isAdmin=false;localStorage.removeItem('quiz_current_email');localStorage.removeItem('quiz_admin_mode');await startLearner()}}else{const password=$('password').value;if(!password){message('กรุณากรอกรหัสผ่านแอดมิน','error');return}const {data,error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;if(!data.user)throw new Error('ไม่พบผู้ใช้');const {data:adminOk,error:adminErr}=await sb.rpc('is_quiz_admin');if(adminErr)throw new Error('ตรวจสิทธิ์แอดมินไม่สำเร็จ กรุณาตรวจ SQL ตั้งค่าระบบ: '+adminErr.message);if(adminOk!==true){await sb.auth.signOut();throw new Error('บัญชีนี้ยังไม่ได้รับสิทธิ์แอดมิน')}isAdmin=true;user={email:data.user.email||email,id:data.user.id,mode:'admin'};localStorage.removeItem('quiz_current_email');localStorage.setItem('quiz_admin_mode','true');await startAdmin()}}catch(err){message(err?.message||'เข้าสู่ระบบไม่สำเร็จ','error')}finally{btn.disabled=false}});
 $('account').onclick=logout;
 async function startLearner(){isAdmin=false;showOnly('subjects');$('account').textContent=user.email+' · ผู้เรียน (แตะเพื่อออก)';setHeader('ศูนย์รวมแบบทดสอบ','เลือกวิชาที่ต้องการติว');await renderSubjects()}
 async function startAdmin(){showOnly('subjects');$('account').textContent=user.email+' · แอดมิน (แตะเพื่อออก)';setHeader('ศูนย์รวมแบบทดสอบ','โหมดผู้ดูแลระบบ');await renderSubjects()}
