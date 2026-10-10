@@ -121,8 +121,8 @@ function showSubjects(){
 async function renderSubjects(){
   subjects=await getSubjects();
   const box=$("subjects");
-  box.innerHTML=`<div class="qc-head"><div><small>QUIZ CENTER</small><h2>เลือกวิชา</h2><p>เลือกวิชาเพื่อดูบทเรียน แบบทบทวน และชุดติวสอบ</p></div><button class="primary" id="adminBtn">⚙ จัดการเนื้อหา</button></div><div class="qc-grid" id="subjectGrid"></div>`;
-  $("adminBtn").onclick=showAdmin;
+  box.innerHTML=`<div class="qc-head"><div><small>QUIZ CENTER</small><h2>เลือกวิชา</h2><p>เลือกวิชาเพื่อดูบทเรียน แบบทบทวน และชุดติวสอบ</p></div>${isAdmin?'<button class="primary" id="adminBtn">⚙ จัดการเนื้อหา</button>':''}</div><div class="qc-grid" id="subjectGrid"></div>`;
+if(isAdmin) $("adminBtn").onclick=showAdmin;
   const grid=$("subjectGrid");
   if(!subjects.length){grid.innerHTML=`<div class="notice">ยังไม่มีวิชาในระบบ หรือ Supabase ยังไม่อนุญาตให้อ่านข้อมูล</div>`;return}
   subjects.forEach(s=>{
